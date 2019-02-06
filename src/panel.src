@@ -1,0 +1,1331 @@
+/*
+** panel.src - Time Series, Cross-Sectional Analysis
+**
+** (C) Copyright 2005-2017 by Aptech Systems, Inc.
+** All Rights Reserved.
+**
+** This Software Product is PROPRIETARY SOURCE CODE OF APTECH
+** SYSTEMS, INC.    This File Header must accompany all files using
+** any portion, in whole or in part, of this Source Code.   In
+** addition, the right to create such files is strictly limited by
+** Section 2.A. of the GAUSS Applications License Agreement
+** accompanying this Software Product.
+**
+** If you wish to distribute any portion of the proprietary Source
+** Code, in whole or in part, you must first obtain written
+** permission from Aptech Systems.
+** --------------------------------------------------------------------------
+**
+**> panel
+**
+**  Purpose:    Procedure for time-series cross-section
+**              regression coefficients from data matrices.
+**              This program allows for different numbers of time-series
+**              observations per cross-sectional unit.
+**
+**  Format:     pOut1 = panel(y, x, grp, robust)
+**
+**  Input:
+**              y 		N x 1 matrix,  stacked cross-sectional dependent data, sorted and
+**                      grouped.
+**
+**              x       N x k matrix, stacked cross-sectional independent data, sorted and
+**                      grouped
+**
+**              grp     N x 1 matrix, stacked group indices corresponding to group assignments for
+**                      for x and y data.
+**
+**              robust  Scalar, indicator variable for robust standard errors. When robust is set to
+**                      one, White clustered standard errors will be computed.
+**
+**  Output:
+**              pOut1   An instance of a panelOut structure containing the following members:
+**
+**                  estFE       An instance of a panelEstimationOut structure.
+**
+**                  estOLS      An instance of a panelEstimationOut structure.
+**
+**                  estBetween  An instance of a panelEstimatinOut structure.
+**
+**                  estRE       An instance of a panelEstimationOut structure.
+**
+**                  Each panelEstimation structure contains the following members:
+**                      method      String, describes method of estimation :
+**                                  "ols"       Pooled OLS
+**                                  "fe"        Fixed effects
+**                                  "between"   Between group
+**                                  "re"        Random effects
+**
+**                      num_grps    Scalar, number of groups in the panel.
+**
+**                      T           Matrix, number of observation per a group.
+**
+**                      obs         Scalar, total number of observations.
+**
+**                      isbalanced  Scalar, indicator variable equal to one if
+**                                  the data is a balanced panel.
+**
+**                      hasconstant Scalar, indicator variable equal to one if the
+**                                  regression includes a constant.
+**
+**                      robust      Scalar, indicator variable equal to one if the
+**                                  regression reports robust standard errors.
+**
+**                      coeff       Matrix, estimated regression coefficients.
+**
+**                      var_coeff   Matrix, variance of coefficients.
+**
+**                      std_error   Matrix, standard error of coefficients.
+**
+**                      y_hat       Matrix, predicted y values.
+**
+**                      y_hat_r     Matrix, predicted transformed y values, based on
+**                                  method regression transformation.
+**
+**                      res         Matrix, regression residual.s
+**
+**                      res_var     Matrix, residual variance
+**
+**                      res_df      Scalar, degrees of freedom.
+**
+**                      xtr         Matrix, transformed x matrix, based on
+**                                  method regression transformation.
+**
+**                      ytr         Matrix, transformed y matrix, based on
+**                                  method regression transformation.
+**
+**                      RSS         Scalar, residual sum of squares.
+**
+**                      TSS         Scalar, total regression sum of squares.
+**
+**                      corrTSS     Scalar, corrected total sum of squares.
+**
+**                      ESS         Scalar, explained sum of squares.
+**
+**                      R2          Scalar, r-squared.
+**
+**                      adjR2       Scalar, adjusted r-squared.
+**
+**                      fstat       Scalar, regression F-stat.
+**
+**                      pvf         Scalar, p-value of F-stat.
+**
+**                      tstat       K x 1 matrix, t-statistic testing null hypothesis
+**                                  that the coefficient is equal to zero.
+**
+**                      pvt         K x 1 matrix, p-value of the t-statistic stored in
+**                                  the t-stat.
+**
+**                      The following are relevant only to the random effects
+**                      model:
+**                      theta
+**
+**                      sigma2_mu   Scalar, random effects error component variance.
+**
+**                      sigma2_1    Scalar, between regression error component variance.
+**
+**                      sigma2_v    Scalar, fixed effects error component variance.
+**
+**                      rho_mu      Scalar, proportion of variance do to individual
+**                                  components.
+**
+**
+*/
+#include panel.sdf
+proc panel(y, x, grp, robust);
+    local x_rows, y_rows, grp_rows;
+    
+    struct panelOut out1;
+    
+    //Check that all inputs are same size
+    x_rows = rows(x);
+    y_rows = rows(y);
+    grp_rows = rows(grp);
+    
+    if x_rows != y_rows or x_rows != grp_rows or y_rows != grp_rows;
+        errorlog "\nERROR: Dependent variable, independent variable, and group index vector"\
+            "must have the same number of observations.";
+    endif;
+    
+    if cols(y) > 1;
+        errorlog "\nERROR: Dependent variable must be column vector.";
+    endif;
+    
+    //Pooled OLS regression
+    struct panelEstimationOut estPooledOLS;
+    out1.estPooledOLS = pooledOLS(x, y, grp, robust);
+    
+    //Fixed effects regression
+    struct panelEstimationOut estFE;
+    out1.estFE= fixedEffects(x, y, grp, robust);
+    
+    struct panelEstimationOut estBetween;
+    out1.estBetween = between(x, y, grp, robust);
+    
+    struct panelEstimationOut estRE;
+    out1.estRE = randomEffects(x, y, grp, robust);
+    
+    retp(out1);
+endp;
+
+proc(1) = __findTimeInvariant(x, x_var);
+    local ind, tmp;
+    
+    //Sum time variances across all groups
+    tmp = sumc(x_var);
+    
+    //If time variance across all groups sums to zero
+    //variable is time invariant
+    ind = (abs(tmp) .<= 1e-7);
+    
+    if sumc(ind) >= cols(x_var);
+        errorlog "\nERROR: Regression must include time-variant dependent"\
+            "variables in the x matrix.";
+    endif;
+    retp(ind);
+endp;
+
+proc(1) = __removeTimeInvariant(x, ind);
+    local tmp;
+    
+    retp(delif(x', ind)');
+    
+endp;
+
+proc(8) = __panelEstPrep(x, y, grp);
+    local y_means, x_means, y_var, x_var, tt, is_balanced, Tmean, Th;
+    
+    //Independent variable group means
+    {x_means, x_var, tt} = findGroupMeans(x, grp);
+    
+    //Dependent variables group means
+    {y_means, y_var, tt} = findGroupMeans(y, grp);
+    
+    Tmean = meanc(tt);
+    Th = cols(tt) ./sumc(1./tt);
+    
+    //Find if balanced dataset or not
+    is_balanced = (rows(unique(tt))==1);
+    
+    retp(y_means, x_means, y_var, x_var, tt, is_balanced, Tmean, Th);
+endp;
+
+/*
+**
+**> pooledOLS
+**
+**  Purpose:    Procedure for performing pooled OLS on stacked panel data.
+**
+**  Format:     estOLS = pooledOLS(y, x, grp, robust)
+**
+**  Input:
+**              y 		N x 1 matrix,  stacked cross-sectional dependent data, sorted and
+**                      grouped.
+**
+**              x       N x k matrix, stacked cross-sectional independent data, sorted and
+**                      grouped
+**
+**              grp     N x 1 matrix, stacked group indices corresponding to group assignments for
+**                      for x and y data.
+**
+**              robust  Scalar, indicator variable for robust standard errors. When robust is set to
+**                      one, White clustered standard errors will be computed.
+**
+**  Output:
+**              estOLS      An instance of a panelEstimationOut structure containing the following
+**                          relevant members:
+**
+**                      method      String, describes method of estimation :
+**                                  "ols"       Pooled OLS
+**                                  "fe"        Fixed effects
+**                                  "between"   Between group
+**                                  "re"        Random effects
+**
+**                      num_grps    Scalar, number of groups in the panel.
+**
+**                      T           Matrix, number of observation per a group.
+**
+**                      obs         Scalar, total number of observations.
+**
+**                      isbalanced  Scalar, indicator variable equal to one if
+**                                  the data is a balanced panel.
+**
+**                      hasconstant Scalar, indicator variable equal to one if the
+**                                  regression includes a constant.
+**
+**                      robust      Scalar, indicator variable equal to one if the
+**                                  regression reports robust standard errors.
+**
+**                      coeff       K x 1 or (K+1) x 1 Matrix, estimated regression coefficients.
+**
+**                      var_coeff   Matrix, variance of coefficients.
+**
+**                      std_error   Matrix, standard error of coefficients.
+**
+**                      y_hat       Matrix, predicted y values.
+**
+**                      y_hat_r     Matrix, predicted transformed y values, based on
+**                                  method regression transformation.
+**
+**                      res         Matrix, regression residual.s
+**
+**                      res_var     Matrix, residual variance
+**
+**                      res_df      Scalar, degrees of freedom.
+**
+**                      xtr         N x K Matrix, transformed x matrix, based on
+**                                  method regression transformation.
+**
+**                      ytr         N x 1 Matrix, transformed y matrix, based on
+**                                  method regression transformation.
+**
+**                      RSS         Scalar, residual sum of squares.
+**
+**                      TSS         Scalar, total regression sum of squares.
+**
+**                      corrTSS     Scalar, corrected total sum of squares.
+**
+**                      ESS         Scalar, explained sum of squares.
+**
+**                      R2          Scalar, r-squared.
+**
+**                      adjR2       Scalar, adjusted r-squared.
+**
+**                      fstat       Scalar, regression F-stat.
+**
+**                      pvf         Scalar, p-value of F-stat.
+**
+**                      tstat       K x 1 matrix, t-statistic testing null hypothesis
+**                                  that the coefficient is equal to zero.
+**
+**                      pvt         K x 1 matrix, p-value of the t-statistic stored in
+**                                  the t-stat.
+*/
+
+proc(1) =  pooledOLS(x, y, grp, robust);
+    local total_obs, grp_nums, num_grps, y_means, x_means, y_var, x_var, tt, is_balanced,
+        Tmean, Th, dum;
+    
+    //Data counts
+    //Total number of observations
+    total_obs = rows(y);
+    //Uniques group numbers
+    grp_nums = unique(grp);
+    //Total number of groups
+    num_grps = rows(grp_nums);
+    
+    //Prepare data
+    {y_means, x_means, y_var, x_var, tt, is_balanced, Tmean, Th} = __panelEstPrep(x, y, grp);
+    
+    // Output structure
+    struct panelEstimationOut estPooledOLS;
+    
+    //Estimation
+    estPooledOLS = __panelEstimation(x, y, robust, "ols", x_means, y_means, num_grps, grp);
+    
+    //Covariance
+    estPooledOLS.method = "ols";
+    estPooledOLS = __panelCovariance(estPooledOLS, grp);
+    
+    //Goodness of fit
+    estPooledOLS.num_grps = num_grps;
+    estPooledOLS.obs = total_obs;
+    estPooledOLS = __goodnessofFit(estPooledOLS, y);
+    
+    //Store model descriptor output
+    estPooledOLS.isbalanced = is_balanced;
+    estPooledOLS.T = tt;
+    
+    estPooledOLS.hasconstant = 1;
+    
+    printPanelEstOut(estPooledOLS);
+    
+    retp(estPooledOLS);
+endp;
+
+/*
+**
+**> fixedEffects
+**
+**  Purpose:    Procedure for performing fixed effects regression on stacked panel data.
+**
+**  Format:     estFE = fixedEffects(y, x, grp, robust)
+**
+**  Input:
+**              y 		N x 1 matrix,  stacked cross-sectional dependent data, sorted and
+**                      grouped.
+**
+**              x       N x k matrix, stacked cross-sectional independent data, sorted and
+**                      grouped
+**
+**              grp     N x 1 matrix, stacked group indices corresponding to group assignments for
+**                      for x and y data.
+**
+**              robust  Scalar, indicator variable for robust standard errors. When robust is set to
+**                      one, White clustered standard errors will be computed.
+**
+**  Output:
+**              estFE      An instance of a panelEstimationOut structure containing the following
+**                          relevant members:
+**
+**                      method      String, describes method of estimation :
+**                                  "ols"       Pooled OLS
+**                                  "fe"        Fixed effects
+**                                  "between"   Between group
+**                                  "re"        Random effects
+**
+**                      num_grps    Scalar, number of groups in the panel.
+**
+**                      T           Matrix, number of observation per a group.
+**
+**                      obs         Scalar, total number of observations.
+**
+**                      isbalanced  Scalar, indicator variable equal to one if
+**                                  the data is a balanced panel.
+**
+**                      hasconstant Scalar, indicator variable equal to one if the
+**                                  regression includes a constant.
+**
+**                      robust      Scalar, indicator variable equal to one if the
+**                                  regression reports robust standard errors.
+**
+**                      coeff       K x 1 or (K+1) x 1 Matrix, estimated regression coefficients.
+**
+**                      var_coeff   Matrix, variance of coefficients.
+**
+**                      std_error   Matrix, standard error of coefficients.
+**
+**                      y_hat       Matrix, predicted y values.
+**
+**                      y_hat_r     Matrix, predicted transformed y values, based on
+**                                  method regression transformation.
+**
+**                      res         Matrix, regression residual.s
+**
+**                      res_var     Matrix, residual variance
+**
+**                      res_df      Scalar, degrees of freedom.
+**
+**                      xtr         N x K Matrix, transformed x matrix, based on
+**                                  method regression transformation.
+**
+**                      ytr         N x 1 Matrix, transformed y matrix, based on
+**                                  method regression transformation.
+**
+**                      RSS         Scalar, residual sum of squares.
+**
+**                      TSS         Scalar, total regression sum of squares.
+**
+**                      corrTSS     Scalar, corrected total sum of squares.
+**
+**                      ESS         Scalar, explained sum of squares.
+**
+**                      R2          Scalar, r-squared.
+**
+**                      adjR2       Scalar, adjusted r-squared.
+**
+**                      fstat       Scalar, regression F-stat.
+**
+**                      pvf         Scalar, p-value of F-stat.
+**
+**                      tstat       K x 1 matrix, t-statistic testing null hypothesis
+**                                  that the coefficient is equal to zero.
+**
+**                      pvt         K x 1 matrix, p-value of the t-statistic stored in
+**                                  the t-stat.
+*/
+
+proc(1) =  fixedEffects(x, y, grp, robust);
+    local total_obs, grp_nums, num_grps, y_means, x_means, y_var, x_var, tt, is_balanced,
+        Tmean, Th;
+    
+    //Data counts
+    //Total number of observations
+    total_obs = rows(y);
+    //Uniques group numbers
+    grp_nums = unique(grp);
+    //Total number of groups
+    num_grps = rows(grp_nums);
+    
+    //Prepare data
+    {y_means, x_means, y_var, x_var, tt, is_balanced, Tmean, Th} = __panelEstPrep(x, y, grp);
+    
+    struct panelEstimationOut estFE;// Compute estimates
+    estFE = __panelEstimation(x, y, robust, "fe", x_means, y_means, num_grps, grp);
+    
+    //Covariance
+    estFE.method = "fe";
+    estFE = __panelCovariance(estFE, grp);
+    
+    //Goodness of fit
+    estFE.num_grps = num_grps;
+    estFE.obs = total_obs;
+    estFE = __goodnessofFit(estFE, y);
+    
+    //Store model descriptor output
+    estFE.isbalanced = is_balanced;
+    estFE.T = tt;
+    estFE.hasconstant = 0;
+    
+    printPanelEstOut(estFE);
+    
+    retp(estFE);
+endp;
+
+/*
+**
+**> between
+**
+**  Purpose:    Procedure for performing a between group regression on stacked panel data.
+**
+**  Format:     estBetween = between(y, x, grp, robust)
+**
+**  Input:
+**              y 		N x 1 matrix,  stacked cross-sectional dependent data, sorted and
+**                      grouped.
+**
+**              x       N x k matrix, stacked cross-sectional independent data, sorted and
+**                      grouped
+**
+**              grp     N x 1 matrix, stacked group indices corresponding to group assignments for
+**                      for x and y data.
+**
+**              robust  Scalar, indicator variable for robust standard errors. When robust is set to
+**                      one, White clustered standard errors will be computed.
+**
+**  Output:
+**              estBetween      An instance of a panelEstimationOut structure containing the following
+**                              relevant members:
+**
+**                      method      String, describes method of estimation :
+**                                  "ols"       Pooled OLS
+**                                  "fe"        Fixed effects
+**                                  "between"   Between group
+**                                  "re"        Random effects
+**
+**                      num_grps    Scalar, number of groups in the panel.
+**
+**                      T           Matrix, number of observation per a group.
+**
+**                      obs         Scalar, total number of observations.
+**
+**                      isbalanced  Scalar, indicator variable equal to one if
+**                                  the data is a balanced panel.
+**
+**                      hasconstant Scalar, indicator variable equal to one if the
+**                                  regression includes a constant.
+**
+**                      robust      Scalar, indicator variable equal to one if the
+**                                  regression reports robust standard errors.
+**
+**                      coeff       K x 1 or (K+1) x 1 Matrix, estimated regression coefficients.
+**
+**                      var_coeff   Matrix, variance of coefficients.
+**
+**                      std_error   Matrix, standard error of coefficients.
+**
+**                      y_hat       Matrix, predicted y values.
+**
+**                      y_hat_r     Matrix, predicted transformed y values, based on
+**                                  method regression transformation.
+**
+**                      res         Matrix, regression residual.s
+**
+**                      res_var     Matrix, residual variance
+**
+**                      res_df      Scalar, degrees of freedom.
+**
+**                      xtr         N x K Matrix, transformed x matrix, based on
+**                                  method regression transformation.
+**
+**                      ytr         N x 1 Matrix, transformed y matrix, based on
+**                                  method regression transformation.
+**
+**                      RSS         Scalar, residual sum of squares.
+**
+**                      TSS         Scalar, total regression sum of squares.
+**
+**                      corrTSS     Scalar, corrected total sum of squares.
+**
+**                      ESS         Scalar, explained sum of squares.
+**
+**                      R2          Scalar, r-squared.
+**
+**                      adjR2       Scalar, adjusted r-squared.
+**
+**                      fstat       Scalar, regression F-stat.
+**
+**                      pvf         Scalar, p-value of F-stat.
+**
+**                      tstat       K x 1 matrix, t-statistic testing null hypothesis
+**                                  that the coefficient is equal to zero.
+**
+**                      pvt         K x 1 matrix, p-value of the t-statistic stored in
+**                                  the t-stat.
+*/
+
+proc(1) =  between(x, y, grp, robust);
+    local total_obs, grp_nums, num_grps, y_means, x_means, y_var, x_var, tt, is_balanced,
+        Tmean, Th;
+    
+    //Data counts
+    //Total number of observations
+    total_obs = rows(y);
+    //Uniques group numbers
+    grp_nums = unique(grp);
+    //Total number of groups
+    num_grps = rows(grp_nums);
+    
+    //Prepare data
+    {y_means, x_means, y_var, x_var, tt, is_balanced, Tmean, Th} = __panelEstPrep(x, y, grp);
+    
+    struct panelEstimationOut estBetween;// Compute estimates
+    estBetween = __panelEstimation(x, y, robust, "between", x_means, y_means, num_grps, grp);
+    
+    //Covariance
+    estBetween.method = "between";
+    estBetween = __panelCovariance(estBetween, grp);
+    
+    //Goodness of fit
+    estBetween.num_grps = num_grps;
+    estBetween.obs = total_obs;
+    estBetween = __goodnessofFit(estBetween, y);
+    
+    //Store model descriptor output
+    estBetween.isbalanced = is_balanced;
+    estBetween.T = tt;
+    estBetween.hasconstant = 1;
+    
+    printPanelEstOut(estBetween);
+    
+    retp(estBetween);
+endp;
+
+/*
+**
+**> randomEffects
+**
+**  Purpose:    Procedure for performing a between group regression on stacked panel data.
+**
+**  Format:     estRE = randomEffects(y, x, grp, robust)
+**
+**  Input:
+**              y 		N x 1 matrix,  stacked cross-sectional dependent data, sorted and
+**                      grouped.
+**
+**              x       N x k matrix, stacked cross-sectional independent data, sorted and
+**                      grouped
+**
+**              grp     N x 1 matrix, stacked group indices corresponding to group assignments for
+**                      for x and y data.
+**
+**              robust  Scalar, indicator variable for robust standard errors. When robust is set to
+**                      one, White clustered standard errors will be computed.
+**
+**  Output:
+**              estRE      An instance of a panelEstimationOut structure containing the following
+**                              relevant members:
+**
+**                      method      String, describes method of estimation :
+**                                  "ols"       Pooled OLS
+**                                  "fe"        Fixed effects
+**                                  "between"   Between group
+**                                  "re"        Random effects
+**
+**                      num_grps    Scalar, number of groups in the panel.
+**
+**                      T           Matrix, number of observation per a group.
+**
+**                      obs         Scalar, total number of observations.
+**
+**                      isbalanced  Scalar, indicator variable equal to one if
+**                                  the data is a balanced panel.
+**
+**                      hasconstant Scalar, indicator variable equal to one if the
+**                                  regression includes a constant.
+**
+**                      robust      Scalar, indicator variable equal to one if the
+**                                  regression reports robust standard errors.
+**
+**                      coeff       K x 1 or (K+1) x 1 Matrix, estimated regression coefficients.
+**
+**                      var_coeff   Matrix, variance of coefficients.
+**
+**                      std_error   Matrix, standard error of coefficients.
+**
+**                      y_hat       Matrix, predicted y values.
+**
+**                      y_hat_r     Matrix, predicted transformed y values, based on
+**                                  method regression transformation.
+**
+**                      res         Matrix, regression residual.s
+**
+**                      res_var     Matrix, residual variance
+**
+**                      res_df      Scalar, degrees of freedom.
+**
+**                      xtr         N x K Matrix, transformed x matrix, based on
+**                                  method regression transformation.
+**
+**                      ytr         N x 1 Matrix, transformed y matrix, based on
+**                                  method regression transformation.
+**
+**                      RSS         Scalar, residual sum of squares.
+**
+**                      TSS         Scalar, total regression sum of squares.
+**
+**                      corrTSS     Scalar, corrected total sum of squares.
+**
+**                      ESS         Scalar, explained sum of squares.
+**
+**                      R2          Scalar, r-squared.
+**
+**                      adjR2       Scalar, adjusted r-squared.
+**
+**                      fstat       Scalar, regression F-stat.
+**
+**                      pvf         Scalar, p-value of F-stat.
+**
+**                      tstat       K x 1 matrix, t-statistic testing null hypothesis
+**                                  that the coefficient is equal to zero.
+**
+**                      pvt         K x 1 matrix, p-value of the t-statistic stored in
+**                                  the t-stat.
+**
+**                      The following are relevant only to the random effects
+**                      model:
+**                      theta
+**
+**                      sigma2_mu   Scalar, random effects error component variance.
+**
+**                      sigma2_1    Scalar, between regression error component variance.
+**
+**                      sigma2_v    Scalar, fixed effects error component variance.
+**
+**                      rho_mu      Scalar, proportion of variance do to individual
+**                                  components.
+*/
+
+proc(1) = randomEffects(x, y, grp, robust);
+    local ind, x_variant, x_means_variant, x_var_variant, tt_variant, sigma2_v, sigma2_1,
+        total_obs, grp_nums, num_grps, y_means, x_means, y_var, x_var, tt, is_balanced,
+        Tmean, Th, sigma2_mu, rho_mu, theta, dum, xtr, ytr, resdf;
+    
+    //Data counts
+    //Total number of observations
+    total_obs = rows(y);
+    //Uniques group numbers
+    grp_nums = unique(grp);
+    //Total number of groups
+    num_grps = rows(grp_nums);
+    
+    //Prepare data
+    {y_means, x_means, y_var, x_var, tt, is_balanced, Tmean, Th} = __panelEstPrep(x, y, grp);
+    
+    //Find time invariant variables
+    ind = __findTimeInvariant(x, x_var);
+    
+    //Find x_matrix without invariant variables
+    x_variant = __removeTimeInvariant(x, ind);
+    
+    //Means for x_variant matrix
+    {x_means_variant, x_var_variant, tt_variant} = findGroupMeans(x, grp);
+    
+    //Run fixed effects without invariant variables
+    struct panelEstimationOut estFE;// Compute estimates
+    estFE = __panelEstimation(x_variant, y, robust, "fe", x_means_variant, y_means, num_grps, grp);
+    //Within variance
+    sigma2_v = estfe.res_var;
+    
+    //Run between group regression without invariant variables
+    struct panelEstimationOut estBetween;// Compute estimates
+    estBetween = __panelEstimation(x_variant, y, robust, "between", x_means_variant, y_means, num_grps, grp);
+    //Between variance
+    sigma2_1 = estBetween.res_var;
+    
+    //Find sigma2_mu
+    sigma2_mu = __sigma2muRE(sigma2_1, sigma2_v, is_balanced, Tmean, Th);
+    
+    //Find rho_mu
+    rho_mu = sigma2_mu / (sigma2_mu + sigma2_v);
+    
+    //Theta
+    //Matrix of dummy variables
+    dum = grp .== grp_nums';
+    theta = __thetaRE(sigma2_v, sigma2_mu, tt, Tmean, is_balanced, dum);
+    
+    //Transform variable for regression
+    {xtr, ytr, resdf} = __transformDataRE(x, y, x_means, y_means, is_balanced, theta);
+    
+    // Compute estimates
+    struct panelEstimationOut estRE;
+    estRE = __panelEstimationRE(xtr, ytr, resdf);
+    
+    estRE.y_hat = (ones(rows(Xtr),1)~X)*estRE.coef;
+    
+    //Transformed variables
+    estRE.method = "re";
+    estRE.xtr = xtr;
+    estRE.ytr = ytr;
+    
+    //Add robust to output structure
+    estRE.robust = robust;
+    
+    //Covariance
+    estRE = __panelCovariance(estRE, grp);
+    
+    //Goodness of fit
+    estRE.num_grps = num_grps;
+    estRE.obs = total_obs;
+    estRE = __goodnessofFit(estRE, y);
+    
+    //Store model descriptor output
+    estRE.isbalanced = is_balanced;
+    estRE.T = tt;
+    
+    estRE.hasconstant = 1;
+    
+    printPanelEstOut(estRE);
+    retp(estRE);
+endp;
+
+proc(1) = __sigma2muRE(sigma2_1, sigma2_v, is_balanced, Tmean, Thmean);
+    local sigma2_mu;
+    
+    // sigma2_u
+    if is_balanced;
+        // Calculate sigma2_mu
+        sigma2_mu = sigma2_1 - sigma2_v/Tmean;
+    else;
+        // Calculate sigma2_mu using the harmonic mean of T
+        sigma2_mu = sigma2_1 - sigma2_v/Thmean;
+    endif;
+    
+    // correct sigma2_mu if < 0
+    if sigma2_mu <= 0;
+        sigma2_mu = 0;
+    endif;
+    
+    retp(sigma2_mu);
+endp;
+
+proc(1) = __thetaRE(sigma2_v, sigma2_mu, tt, Tmean, is_balanced, dum);
+    local theta, tt_rep;
+    
+    tt_rep = __repelem(tt, dum);
+    
+    // Theta
+    if is_balanced;
+        theta = 1 - sqrt(sigma2_v./(Tmean.*sigma2_mu + sigma2_v));
+    else;
+        theta = 1 - sqrt(sigma2_v./(tt_rep.*sigma2_mu + sigma2_v));
+    endif;
+    
+    retp(theta);
+endp;
+
+proc(1) = __repelem(tt, dum);
+    local x_tr;
+    
+    x_tr = sumr(tt'.*dum);
+    retp(x_tr);
+endp;
+
+proc(3) = __transformData(x, y, robust, method, x_mean, y_mean, num_grps, grp);
+    local xtr, ytr, resdf, dum, grp_nums;
+    
+    if method=="ols";
+        
+        xtr = ones(rows(x),1)~x;
+        ytr = y;
+        
+        resdf = rows(x) - cols(xtr);
+        
+        retp(xtr, ytr, resdf);
+        
+    elseif method=="fe";
+        
+        xtr = x - x_mean;
+        ytr = y - y_mean;
+        
+        resdf = (rows(x)-num_grps)-cols(xtr); // (N-n) instead of (n*T) for compatibility with unbalanced panels
+        
+        
+        retp(xtr, ytr, resdf);
+        
+    elseif method == "between";
+        //Uniques group numbers
+        grp_nums = unique(grp);
+        
+        // Between transformation.
+        dum = (grp .== grp_nums');
+        xtr = x_mean/dum;
+        xtr = ones(rows(xtr),1)~xtr;
+        ytr = y_mean/dum;
+        
+        resdf = num_grps - cols(xtr);
+        
+        retp(xtr, ytr, resdf) ;
+        
+    endif;
+endp;
+
+proc(3) = __transformDataRE(x, y, x_means, y_means, is_balanced, theta);
+    local xtr, ytr, resdf, tmp;
+    
+    // Add constant term
+    x = ones(rows(x),1)~x;
+    
+    // Random effects transformation
+    if is_balanced;
+        ytr = y - theta * y_means;
+        Xtr = X - theta * (ones(rows(x_means),1)~x_means);
+    else;
+        ytr = y - theta .* y_means;
+        xtr = X - theta .* (ones(rows(x_means),1)~x_means);
+    endif;
+    
+    resdf = rows(x) - cols(xtr);
+    retp(xtr, ytr, resdf) ;
+endp;
+
+proc(1) = __panelEstimation(x, y, robust, method, x_mean, y_mean, num_grps, grp);
+    local xtr, ytr, resdf;
+    
+    {xtr, ytr, resdf} = __transformData(x, y, robust, method, x_mean, y_mean, num_grps, grp);
+    
+    struct panelEstimationOut estOut;// Compute estimates
+    
+    // Inverse of Xtr'Xtr
+    estOut.invXtrXtr = (inv(Xtr'*Xtr));
+    
+    //Coefficient
+    estOut.coef = estOut.invXtrXtr*(Xtr'*ytr);
+    
+    // Fitted values
+    estOut.y_hat_r = Xtr*estOut.coef;
+    
+    if method=="ols";
+        estOut.y_hat = (ones(rows(Xtr),1)~X)*estOut.coef;
+    elseif method=="between";
+        estOut.y_hat = (ones(rows(X),1)~X)*estOut.coef;
+    else;
+        estOut.y_hat = X*estOut.coef;
+    endif;
+    
+    // Residuals
+    estOut.res = ytr - estOut.y_hat_r;
+    
+    // Residual variance
+    estOut.res_var = (estOut.res'*estOut.res) ./ resdf;
+    estOut.res_df = resdf;
+    
+    //Transformed variables
+    estOut.xtr = xtr;
+    estOut.ytr = ytr;
+    
+    //Add robust to output struct
+    estOut.robust = robust;
+    
+    retp(estOut);
+endp;
+
+proc(1) = __panelEstimationRE(xtr, ytr, resdf);
+    
+    struct panelEstimationOut estOut;// Compute estimates
+    
+    // Inverse of Xtr'Xtr
+    estOut.invXtrXtr = (invpd(xtr'*xtr));
+    
+    estOut.coef = estOut.invXtrXtr*(xtr'*ytr);
+    
+    // Fitted values
+    estOut.y_hat_r = xtr*estOut.coef;
+    
+    // Residuals
+    estOut.res = ytr - estOut.y_hat_r;
+    
+    // Residual variance
+    estOut.res_var = (estOut.res'*estOut.res) ./ resdf;
+    estOut.res_df = resdf;
+    
+    retp(estOut);
+endp;
+
+/*
+**
+**> findGroupMeans
+**
+**  Purpose:    Procedure for performing finding the means, variances, and .
+**              Under the null hypothesis both estimates are consistent but
+**              the random effects coefficient is efficient. Under the
+**              alternate hypothesis, the fixed effects coefficient is consistent
+**              but the random effects coefficient is not.
+**
+**  Format:     {means, variances, T} = findGroupMeans(x, grp)
+**
+**  Input:
+**              x           NT_i x K matrix,  stacked panel data of N groups with T_i observations each.
+**                          Panel may be unbalanced.
+**
+**              grp         NT_i x 1 matrix, stacked group indices corresponding to group assignments for
+**                          for x and y data.
+**
+**  Output:
+**              means       N x K matrix, means by group for each column of input matrix.
+**
+**              variances   N x K matrix, variances by group for each column of the input matrix.
+**
+**              T           N x 1 matrix, number of observations (T_i) per a group.
+*/
+
+proc(3) = findGroupMeans(x, grp);
+    local vrs, grpnums, dum, sumdat, means, gobs, varncs,k;
+    
+    //Number of variables
+    k = cols(x);
+    
+    //Add vector of ones to variables
+    vrs = ones(rows(x),1)~x;
+    
+    // Creating Vector of Group Numbers
+    grpnums = unique(grp,1);
+    
+    //Matrix of dummy variables for groups
+    dum = grp .== grpnums';     /* Matrix of dummy variables for groups */
+    
+    sumdat = grpnums~(dum'vrs)~ (dum'(vrs[.,2:cols(vrs)].*vrs[.,2:cols(vrs)]));
+    
+    /* SUMDAT is a matrix of summed variables: # of rows=
+    :: # of groups in this read # of cols=2*(# of variables)
+    :: + 2 The first column contains the observation index.
+    :: The second column contains the number of observations per
+    :: group. The next k columns contains the sum of variables by
+    :: group The last k columns contain the sum of sqrd.
+    :: vars.
+    */
+    
+    //Find means of data across time
+    //The second column of sumdat contains the number of observations per group
+    means = sumdat[.,3:(k+2)]./sumdat[.,2];
+    
+    //Allowing for only 1 observation */
+    gobs = sumdat[.,2] + (sumdat[.,2].==1);
+    
+    //Computing Variances
+    varncs = (sumdat[.,(3+k):cols(sumdat)] - (sumdat[.,2].*means.*means)) ./(gobs-1);
+    retp(dum*means, varncs, sumdat[.,2]);
+endp;
+
+proc(1) = __panelCovariance(struct panelEstimationOut estOut, grp);
+    local varcoef, id_clus, uid_clus, n_clus, tmp, tmp_res, tmp_var, tmp_xtr, total_sum;
+    
+    if estOut.method $== "between" ;
+        if estOut.robust == 1;
+            print "Robust standard errors not available for between model. Regular standard errors computed.";
+        endif;
+        
+        estOut.var_coeff = estOut.res_var * estOut.invXtrXtr;
+        
+        //Standard deviation
+        estOut.std_error = sqrt(diag(estOut.var_coeff));
+        
+        retp(estOut);
+    endif;
+    
+    // Covariance matrix
+    if estOut.robust == 0;
+        
+        estOut.var_coeff = estOut.res_var * estOut.invXtrXtr;
+        
+    elseif  estOut.robust == 1;
+        
+        // White-robust standard errors adjusted for cluster
+        // Get unique ids
+        id_clus = grp;
+        uid_clus = unique(id_clus);
+        n_clus = rows(uid_clus);
+        
+        // Compute total sum
+        total_sum = 0;
+        for i(1, n_clus, 1);
+            tmp_var = (id_clus .== uid_clus[i]);
+            tmp_xtr = selif(estOut.xtr, tmp_var);
+            tmp_res = selif(estOut.res, tmp_var);
+            total_sum = total_sum + tmp_xtr'*tmp_res*tmp_res'*tmp_xtr;
+            //total_sum = total_sum + Xtr[id_clus==uid_clus(i),:]'*res(id_clus==uid_clus(i))*res(id_clus==uid_clus(i))'*Xtr(id_clus==uid_clus(i),:);
+        endfor;
+        
+        estOut.var_coeff = estOut.invXtrXtr * total_sum * estOut.invXtrXtr;
+        
+        // Degrees of freedom correction
+        if estOut.method $== "fe";
+            estOut.var_coeff = (n_clus/(n_clus-1)) * (rows(estOut.xtr)/(rows(estOut.xtr)-cols(estOut.xtr))) .* estOut.var_coeff;
+        else;
+            estOut.var_coeff = (n_clus/(n_clus-1)) * ((rows(estOut.xtr)-1)/(rows(estOut.xtr)-cols(estOut.xtr))) .* estOut.var_coeff;
+        endif;
+        
+        // Change resdf to the correct value with cluster
+        estOut.res_df = n_clus - 1;
+    endif;
+    
+    //Standard deviation
+    estOut.std_error = sqrt(diag(estOut.var_coeff));
+    
+    retp(estOut);
+endp;
+
+proc(1) = __goodnessofFit(struct panelEstimationOut estOut, y);
+    local n, obs,k, M0, adjr2, adjr2_correction, temp, xx;
+    
+    n = estOut.num_grps;
+    obs = estOut.obs;
+    k = cols(estOut.xtr);
+    
+    // Goodness of fit
+    if lower(estOut.method) $== "between";
+        M0 = eye(n) - 1/n * ones(n,1);
+        adjr2_correction = (n - 1) ./ (estOut.res_df);
+    else;
+        M0 = eye(obs) - 1/obs * ones(obs,1);
+        if lower(estOut.method) $=="fe" and estOut.robust;
+            adjr2_correction = (obs - 1) ./ ((obs-n)-k);
+        else;
+            adjr2_correction = (obs - 1) ./ (estOut.res_df);
+        endif;
+    endif;
+    
+    //ANOVA
+    estOut.RSS = estOut.res' * estOut.res;
+    estOut.TSS = y' * y;
+    
+    //Corrected TSS
+    if lower(estOut.method) $== "between";
+        estOut.corrTSS = estOut.ytr'*estOut.ytr - estOut.num_grps*meanc(estOut.ytr)*meanc(estOut.ytr);
+    else ;
+        estOut.corrTSS = estOut.ytr'*estOut.ytr - estOut.obs*meanc(estOut.ytr)*meanc(estOut.ytr);
+    endif;
+    
+    estOut.ESS = estOut.TSS - estOut.RSS;
+    
+    //R-squared
+    estOut.r2 = 1 - (estOut.res' * M0 * estOut.res) ./ (estOut.ytr' * M0 * estOut.ytr);
+    estOut.adjr2 = 1 - adjr2_correction .* (1 - estOut.r2);
+    
+    //Fstat
+    xx =estOut.xtr'*estOut.xtr;
+    estOut.fstat = estOut.coef'*xx*estOut.coef*estOut.res_df/(estOut.RSS*k);
+    
+    //T-stat
+    //T-stat
+    estOut.tstat = estOut.coef./estOut.std_error;
+    
+    //P-values f-stat
+    estOut.pvf = cdffc(estOut.fstat,k,estOut.res_df);
+    
+    //P-value t-stat
+    estOut.pvt = 2*cdftc(abs(estOut.tstat),estOut.res_df);
+    
+    // Compute correc r2 for 're'
+    if lower(estOut.method) $== "re";
+        temp = corrx(estOut.y_hat~y);
+        estOut.r2 = temp[1,2].^2;
+        estOut.adjr2 = 1 - adjr2_correction .* (1 - estOut.r2);
+    endif;
+    retp(estOut);
+endp;
+
+/*
+**
+**> hausmanTest
+**
+**  Purpose:    Procedure for performing the Hausman test.
+**              Under the null hypothesis both estimates are consistent but
+**              the random effects coefficient is efficient. Under the
+**              alternate hypothesis, the fixed effects coefficient is consistent
+**              but the random effects coefficient is not.
+**
+**  Format:     chistat = hausmanTest(bdv, bec, vcdv, vcec)
+**
+**  Input:
+**              bfe         (k-1) x 1 matrix,  fixed effects coefficient estimates.
+**
+**              bec         k x 1 matrix, random effects coefficient estimates.
+**
+**              vcfe        (k-1) x (k-1) matrix, fixed effects coefficient variance-covariance.
+**
+**              vcec        k x k matrix, random effects coefficient variance-covariance.
+**
+**  Output:
+**              chitat      Scalar, chi-squared Hausman test-statistic, with k-1 degrees of freedom.
+*/
+
+proc(1) = hausmanTest(bfe, bre, vcfe, vcre);
+    local bdif, vcdif, chistat, pchis, k;
+    
+    if rows(bfe) == rows(bre) - 1;
+        
+        k = rows(vcre);
+        
+        //Difference in coefficients
+        bdif = bfe - bre[2:rows(bre),.];
+        
+        //Variance-covariance difference
+        vcdif = vcfe - vcre[2:rows(vcre),2:cols(vcre)];
+        
+        //Chi2 Squared Stat
+        chistat = bdif'(inv(vcdif))*bdif;
+        
+        if chistat > 0;
+            pchis = cdfchic(chistat,k-1);
+        else;
+            pchis = error(0);
+        endif;
+        
+        print;
+        print;
+        print;
+        print "          Hausman (1978) Chi-Squared Specification T"\
+            "est ";
+        print;
+        print;
+        print "    Null hypothesis:  Error components model is the "\
+            "correct specification.";
+        print;
+        print ("    Chi-squared statistic (" $+ ftos(k-1,"%-*.*f",1,0)
+            $+ ") = " $+ ftos(chistat,"%-*.*f",12,4));
+        print "    P-value = " ftos(pchis,"%-*.*f",12,4);
+        print;
+    endif;
+    
+    retp(chistat);
+endp;
+
+/*
+**
+**> _mt_tsprtp
+**
+**  Purpose:   Type out tscs results.
+**
+**  Format:    call _mt_tsprtp(depvar,vars,varnms,nobs,df,rsq,rbsq,
+**                   rv,tv,k,fstat,pvf,sigu2,sige2,b,stderr,t,pvt,
+**                   cflag,model,ngrp);
+**
+**  Output:    Null string.
+**
+**
+*/
+
+proc (0) = printPanelEstOut(struct panelEstimationOut estOut);
+    
+    local mss;
+    
+    /* Printing Title */
+    mss = { . };
+    msym "---";
+    __printHeader(estOut.method);
+    print ;
+    
+    __printRegStats(estOut);
+    print ;
+    
+    __printRegCoefficients(estOut);
+    print ;
+    print ;
+    print ;
+endp;
+
+proc(1) = __getTableVarLabel(k, method);
+    local tmp, field, prec, fmat, ostr;
+    
+    field = 1;
+    prec = 0;
+    fmat = "%*.*lf";
+    
+    
+    ostr = "X1";
+    for i(2, k, 1);
+        tmp = "X" $+ ftos(i, fmat, field, prec);
+        ostr = ostr $| tmp;
+    endfor;
+    
+    if method $!= "fe";
+        ostr = "CONSTANT" $| ostr;
+        
+    endif;
+    
+    retp(ostr);
+endp;
+
+proc(0) = __printHeader(method);
+    
+    if lower(method) $== "ols";
+        
+        print "-----------------------POOLED OLS (CONSTRAINED) RESULTS  --------"\
+            "--------------";
+    elseif lower(method) $== "re";
+        print "---------------------- GLS RANDOM EFFECTS RESULTS  -------"\
+            "---------------";
+    elseif lower(method) $== "fe";
+        print "-----------------------FIXED EFFECTS (WITHIN) RESULTS  --------"\
+            "--------------";
+    elseif lower(method) $== "between";
+        print "-----------------------BETWEEN GROUP RESULTS  --------"\
+            "--------------";
+    endif;
+endp;
+
+proc(0) = __printRegStats(struct panelEstimationOut estOut);
+    
+    print "Observations          :  " ftos(estOut.obs,"%-*.*f",12,0);
+    print "Number of Groups      :  " ftos(estOut.num_grps,"%-*.*f",12,0);
+    print "Degrees of freedom    :  " ftos(estOut.res_df,"%-*.*f",12,0);
+    
+    
+    print "R-squared             :  " ftos(estOut.r2,"%-*.*f",12,3);
+    print "Adj. R-squared        :  " ftos(estOut.adjr2,"%-*.*f",12,3);
+    
+    
+    print "Residual SS           :  " ftos(estOut.RSS,"%-*.*f",12,3);
+    print "Std error of est      :  " ftos(sqrt(estOut.res_var),"%-*.*f",12,3);
+    print "Total SS (corrected)  :  " ftos(estOut.corrTSS,"%-*.*f",12,3);
+    print ("F                     =  " $+ ftos(estOut.fstat,"%-*.*f",12,3) $+
+        " with " $+ ftos(rows(estOut.coef),"%*.*f",1,0) $+ "," $+ ftos(estOut.res_df,"%-*.*f",1,0) $+
+        " degrees of freedom");
+    print "P-value               =  " ftos(estOut.pvf,"%-*.*f",12,3);
+endp;
+
+proc(0) = __printRegCoefficients(struct panelEstimationOut estOut);
+    local colwid, k, b, t, pvt, stderr, omat, fmt, ostr;
+    
+    //if not stnd;
+    colwid = 12;
+    
+    print (strsect("Variable                          ",1,colwid) $+
+        "        Coef.       Std. Error       t-Stat       P-Value");
+    print chrs(45*ones(58+colwid,1));;
+    
+    b = estOut.coef;
+    t = estOut.tstat;
+    pvt = estOut.pvt;
+    stderr = estOut.std_error;
+    
+    omat = b~stderr~t~pvt;
+    fmt = ("%-"$+ftos(colwid,"%*.*f",1,0)$+"."$+ftos(colwid,"%*.*f",1,0)$+"s") $|
+        "%14.6f" $| "%15.6f" $| "%15.6f" $| "%12.3f";
+    if lower(estOut.method) $!= "fe";
+        k = rows(estOut.coef) -1;
+    else;
+        k = rows(estOut.coef);
+    endif;
+    
+    ostr = __getTableVarLabel(k , lower(estOut.method));
+    ostr = satostrC(ostr,fmt[1]) $~ ftostrC(omat,fmt[2:5]);
+    
+    if rows(ostr) == 1;
+        print;
+    endif;
+    ostr = strcombine(ostr,"",0);
+    print ostr;
+    print;
+endp;

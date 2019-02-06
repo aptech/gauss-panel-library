@@ -1,0 +1,85 @@
+struct panelEstimationOut {
+    
+    //Method
+    string method;
+    
+    //Number of groups
+    matrix num_grps;
+
+    //Number of observations per group
+    matrix T;
+
+    //Total observation
+    matrix obs;
+
+    //Indicator if balanced
+    scalar isbalanced;
+    
+    //Indicator for has constant
+    scalar hasconstant;
+    
+    //Indicator for robust 
+    //Coefficients
+    matrix coef;
+
+    //Variance of coefficients
+    matrix var_coeff;
+    
+    //Standard Error
+    matrix std_error;
+    
+    //Predictions
+    matrix y_hat;
+    
+    //Transformed predictions
+    matrix y_hat_r;
+    
+    //Residuals
+    matrix res;
+    matrix res_var;
+    matrix res_df;
+    
+    //Random effects
+    matrix theta;
+    matrix sigma2_mu;
+    matrix sigma2_1;
+    matrix sigma2_v;
+    matrix rho_mu;
+    matrix invXtrXtr;
+    
+    //Transformed
+    matrix xtr;
+    matrix ytr;
+  
+    //Robust errors
+    scalar robust;
+    
+    //Goodness of fit
+    matrix RSS;
+    matrix TSS;
+    matrix corrTSS;
+    
+    matrix ESS;
+    matrix r2;
+    matrix adjr2;
+    scalar fstat;
+    scalar pvf;
+    matrix pvt;
+    matrix tstat;
+};
+
+struct panelOut {
+
+    //Fixed effects output
+    struct panelEstimationOut estFE;
+
+    //Pooled OlS output
+    struct panelEstimationOut estPooledOLS;
+    
+    //Between estimation
+    struct panelEstimationOut estBetween;
+    
+    //Random effects estimation
+    struct panelEstimationOut estRE;
+    
+};

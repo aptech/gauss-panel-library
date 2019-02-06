@@ -1,0 +1,317 @@
+/*
+** panel.src
+** Contains procedures for the handling
+** and transforming panel data
+*/
+
+#include dynargs.dec
+
+/*
+**> pdStack
+**
+**  Purpose:  Stacks columns of panel series into a single stacked vector
+**			  of data.
+**
+**  Format:  y_st = pdStack(yt [,numvars])
+**           y_st = pdStack(dataset, variable [,numvars]);
+**
+**  Input:   yt	-  T x K matrix of cross sectional data
+**
+**  Output:  y_st -  (T*K)x1 Matrix of stacked cross sectional data, i.e. yt[., 1]|yt[., 2]|yt[., 3]....|yt[., K];
+*/
+
+proc (1) = pdStack(...);
+    local n_dynargs, y;
+    
+    n_dynargs = COUNT_DYNARGS;
+    y = sysstate(GET_ONE_DYNARG, 1);
+    
+    /////////////////////////////////
+    //
+    //  dataset, formula case
+    //
+    ////////////////////////////////
+    if type(y) == 13;
+        if n_dynargs < 2 or n_dynargs > 3;
+            errorlogat "'pdStack': accepts 2-3 inputs, "$+ntos(n_dynargs)$+" passed in\npdStack(dataset, variable);";
+            end;
+        endif;
+        retp(__pdstack(__pdStack_dataset_input(...)));
+    endif;
+    
+    ////////////////////////////////
+    //
+    //   Vector case
+    //
+    ////////////////////////////////
+    if n_dynargs > 1;
+        errorlogat "'pdStack': accepts 1 input, " $+ ntos(n_dynargs) $+ " passed in\npdStack(yt)";
+        end;
+    endif;
+    retp(vec(y));
+endp;
+
+proc (2) = __pdStack_dataset_input(...);
+    local n_dynargs, nvars;
+    
+    n_dynargs = COUNT_DYNARGS;
+    
+    if n_dynargs < 3;
+        retp(loadd(sysstate(GET_ONE_DYNARG, 1), sysstate(GET_ONE_DYNARG, 2)), 1);
+    else;
+        // Get data
+        retp(loadd(sysstate(GET_ONE_DYNARG, 1), sysstate(GET_ONE_DYNARG, 2)), sysstate(GET_ONE_DYNARG, 3));
+    endif;
+endp;
+
+proc (1) = __pdstack(y, nvars);
+    local grp;
+    
+    grp = sortc(reshape(seqa(1, 1, cols(y)/nvars), rows(y)*cols(y)/nvars, 1), 1);
+    
+    if nvars == 1;
+        local tmp;
+        tmp = vec(y);
+        retp(grp~tmp);
+    else;
+        retp(grp~reshape(y', nvars, rows(y)*cols(y)/nvars)');
+    endif;
+endp;
+
+/*
+**  pdWide
+**
+**  Purpose:  Creates wide matrix of cross-section (T x N) from stacked
+**            cross-sectional data.
+**
+**  Format:  y_wide = pdWide(yt)
+**
+**  Input:   yt	-       (TxN) x K matrix of cross sectional data. (TxN) x K matrix of cross sectional data. Time series must be in the last k -2 columns.
+**                      Time data must be in the first column and group identifier must be in the second
+**                      column.
+**
+**  Output:  y_wide -   T x (K+1) Matrix of cross sectional data,
+**                      concatenated with the time vector.
+**
+*/
+
+proc (1) = pdWide(...);
+    local time_var, t, id_var, num_grps, y_wide, tmp, num_vars, y, n_dynargs;
+    
+    n_dynargs = COUNT_DYNARGS;
+    y = sysstate(GET_ONE_DYNARG, 1);
+    
+    /////////////////////////////////
+    //
+    //  dataset, formula case
+    //
+    ////////////////////////////////
+    if type(y) == 13;
+        if n_dynargs != 2;
+            errorlogat "'pdWide': accepts 2-3 inputs, "$+ntos(n_dynargs)$+" passed in\npdWide(dataset, formula);";
+            end;
+        endif;
+        retp(__pdWide(__pdWide_dataset_input(...)));
+    endif;
+    
+    ////////////////////////////////
+    //
+    //   Vector case
+    //
+    ////////////////////////////////
+    if n_dynargs > 1;
+        errorlogat "'pdWide': accepts 1 input, " $+ ntos(n_dynargs) $+ " passed in\npdWide(yt)";
+        end;
+    endif;
+    retp(__pdWide(__pdWide_matrix_input(...)));
+    
+endp;
+
+proc (3) = __pdWide_dataset_input(...);
+    local yt, id_var, time_var;
+    
+    // Load data matrix
+    yt = loadd(sysstate(GET_ONE_DYNARG, 1), sysstate(GET_ONE_DYNARG, 2));
+    
+    // Extract id_var
+    id_var = yt[., 2];
+    
+    // Extract time_var
+    time_var = yt[., 1];
+    
+    retp(yt[., 3:cols(yt)], id_var, time_var);
+endp;
+
+proc (3) = __pdWide_matrix_input(...);
+    local yt, id_var, time_var;
+    
+    // Load data matrix
+    yt = sysstate(GET_ONE_DYNARG, 1);
+    
+    if cols(yt) < 3;
+        errorlog "'pdWide': Number of columns must be at least three: data column, time column and group column.";
+        end;
+    endif;
+    
+    // Extract id_var
+    id_var = yt[., 2];
+    
+    // Extract time_var
+    time_var = yt[., 1];
+    
+    retp(yt[., 3:cols(yt)], id_var, time_var);
+endp;
+
+proc (1) = __pdWide(yt, id_var, time_var);
+    local t, num_grps, y_wide, tmp, num_vars, y, n_dynargs;
+    
+    
+    // Time vector
+    t = rows(unique(time_var));
+    
+    // Groups
+    num_grps = rows(unique(id_var));
+    
+    // Number of variables
+    num_vars = cols(yt);
+    
+    // Storage matrix
+    y_wide = zeros(t, num_grps*num_vars);
+    
+    if balanced(id_var);
+        
+        // First variable
+        y_wide[., 1:num_grps] = __pdWideBalanced(yt[., 1], num_grps, t);
+        
+        // Remaining variables
+        for i(2, num_vars,1);
+            i;
+            tmp = __pdWideBalanced(yt[., i], num_grps, t);
+            y_wide[., (i-1)*num_grps+1:num_grps*i] = tmp;
+        endfor;
+    else;
+        
+        // First variable
+        y_wide[., 1:num_grps] = __pdwideData(time_var~id_var~yt[., 1], t, num_grps);
+        
+        // Remaining variables
+        for i(2, num_vars,1);
+            tmp = __pdwideData(time_var~id_var~yt[., i], t, num_grps);
+            y_wide[., i*num_grps+1:num_grps*(i+1)] = tmp;
+        endfor;
+    endif;
+    
+    retp(unique(time_var)~y_wide);
+endp;
+
+proc (1) = __pdwideData(yt, t, num_grps);
+    local yt_filled;
+    
+    yt_filled = pdFill(yt, 1, 2);
+    
+    // Reshape data
+    retp(reshape(yt_filled[., 3], num_grps, t)');
+endp;
+
+/*
+**> pdFill
+**
+**  Purpose:  Expands matrix of time series data to fill missing values into
+**            unbalanced cross-sectional panel.
+**
+**
+**  Format:  y_filled = pdFill(data, timecol, idcol)
+**
+**  Input:   data	-   (Ni*Ti) x 1 matrix of cross sectional data.
+**
+**          timecol -   Scalar, number of column containing time data.
+**
+**          idcol   -   Scalar, number of column containing group id.
+**
+**  Output:  y_filled -   (N*Ti_max) * K Matrix of cross sectional data,
+**                        with missing values inserted.
+**
+*/
+
+proc (1) = pdFill(data, timecol, idcol);
+    local t, tmp, time_vec, new_data, grps, num_grps, startrow, endrow, grp_data, z;
+    
+    // Get earliest start date
+    time_vec = unique(data[., timecol]);
+    
+    //Vector of groups
+    grps = unique(data[., idcol]);
+    
+    // Num groups
+    num_grps = rows(grps);
+    
+    // New data mat
+    new_data = zeros(rows(time_vec), cols(data));
+    
+    // T
+    t = rows(time_vec);
+    
+    for i(1, num_grps, 1);
+        
+        // Group data matrix
+        grp_data = selif(data, data[., idcol] .== grps[i]);
+        
+        // Get index for matching dates
+        z = indnv(grp_data[., timecol], time_vec);
+        
+        if i == 1;
+            // Place data
+            new_data[z, .] = grp_data;
+            
+            // Replace missing values
+            for j(1, rows(new_data), 1);
+                if new_data[j, timecol] == 0;
+                    new_data[j, .] = miss(new_data[j, .], 0);
+                endif;
+            endfor;
+            
+            // Add date column
+            new_data[., timecol] = time_vec;
+            
+            // Replace group number
+            new_data[., idcol] = grps[i]*ones(rows(new_data), 1);
+        else;
+            //Create tmp mat
+            tmp = zeros(rows(time_vec), cols(data));
+            
+            // Replace missing values
+            for j(1, rows(tmp), 1);
+                if tmp[j, timecol] == 0;
+                    tmp[j, .] = miss(tmp[j, .], 0);
+                endif;
+            endfor;
+            
+            // Place data
+            tmp[z, .] = grp_data;
+            
+            // Restore date column
+            tmp[., timecol] = time_vec;
+            
+            // Replace group number
+            tmp[., idcol] = grps[i]*ones(rows(tmp), 1);
+            
+            new_data = new_data | tmp;
+        endif;
+    endfor;
+    retp(new_data);
+endp;
+
+proc (1) = __pdWideBalanced(data, num_grps, t);
+    retp(reshape(data, num_grps, t)');
+endp;
+
+proc (1) = pdbalanced(grp);
+    local num_grps, T, _isbalanced;
+    
+    num_grps = rows(unique(grp));
+    T = unique(counts(grp, unique(grp)));
+    
+    _isbalanced = rows(t) == 1;
+    
+    retp( _isbalanced);
+endp;
