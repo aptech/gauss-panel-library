@@ -15,9 +15,12 @@ These files such be downloaded to a directory which should be set to the working
 
 ![changing the GAUSS working directory](images/working_directory.png)
 
-::: info
 **Note:** Because these are pre-release and no library has yet been built, these files utilize `#include` to access procedures. For more on `#include` please see our Aptech blog [What you need to know about #include](https://www.aptech.com/blog/what-you-need-to-know-about-include/)
-:::
+
+## Example files
+Two program files are included:
+1. [did_calculations.gss](did_calculations.gss) - This file contains the code for computing the difference-in-differences calculations reported in the blog.
+2. [did_plots.gss](did_plots.gss) - This file produces the plot included in the blog.
 
 ## Authors
 [Erica Clower](mailto:eclower@aptech.com)  
