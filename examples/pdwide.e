@@ -5,7 +5,7 @@
 ** data from long panel data to a wide form panel 
 **
 */
-#include ../src/pdutil.src
+#include pdutil.src
 
 /*
 ** First using dataset and formula specification
@@ -13,7 +13,7 @@
 ** Note that we must also load the time variable (first)
 ** and the group indicator (second);
 */
-y_wide1 = pdWide("grunfeld.dat", "year + firm + investment");
+y_wide1 = pdWide(__FILE_DIR $+ "grunfeld.dat", "year + firm + investment");
 
 /*
 ** Next using dataset and formula specification
@@ -23,7 +23,7 @@ y_wide1 = pdWide("grunfeld.dat", "year + firm + investment");
 */
 formula = "year + firm + investment + firm_value + capital";
 
-y_wide2 = pdWide("grunfeld.dat", "year + firm + .");
+y_wide2 = pdWide(__FILE_DIR $+ "grunfeld.dat", "year + firm + .");
 
 /*
 ** Finally using a data matrix format to load variables. 
@@ -31,10 +31,10 @@ y_wide2 = pdWide("grunfeld.dat", "year + firm + .");
 ** We still must have the time variable first
 ** and the group variable second
 */
-time_var = loadd("grunfeld.dat", "year");
+time_var = loadd(__FILE_DIR $+ "grunfeld.dat", "year");
 
-id_var = loadd("grunfeld.dat", "firm");
+id_var = loadd(__FILE_DIR $+ "grunfeld.dat", "firm");
 
-yt = loadd("grunfeld.dat", "investment + firm_value + capital");
+yt = loadd(__FILE_DIR $+ "grunfeld.dat", "investment + firm_value + capital");
 
 y_wide3 = pdWide(time_var~id_var~yt);
