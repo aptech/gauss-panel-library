@@ -1,7 +1,7 @@
 /*   Panel Example
 **
 **  The following is an example of a Gauss program for executing the
-**  TSCS module.  This program provides estimates for the classic Grunfeld
+**  panel function.  This program provides estimates for the classic Grunfeld
 **  dataset [grunfeld.dat].  These data were originally found in PhD
 **  dissertation of Y. Grunfeld (University of Chicago, 1958). The data
 **  is a balanced dataset covering 10 firms [firm = 1, ..., 10] for 20
@@ -20,22 +20,25 @@
 **
 */
 
-new;
-cls;
-library pdlib;
+#include panel.sdf
+#include panel.src
 
-//Load grunfeld data
+//new;
+//cls;
+//library pdlib;
+
+// Load grunfeld data
 data = loadd(__FILE_DIR $+ "grunfeld.dat");
 
-//Define variables
+// Define variables
 y = data[., 3];
 x = data[., 4 5];
 grp = data[., 1];
 
-//Declare tscsmt output structure
+// Declare tscsmt output structure
 struct panelOut out1;
 
 out1 = panel(y, x, grp, 0);
 
-//Run the Hausman test
+// Run the Hausman test
 call hausmanTest(out1.estFE.coef, out1.estRE.coef, out1.estFE.var_coeff, out1.estRE.var_coeff);
