@@ -18,9 +18,13 @@ These files such be downloaded to a directory which should be set to the working
 **Note:** Because these are pre-release and no library has yet been built, these files utilize `#include` to access procedures. For more on `#include` please see our Aptech blog [What you need to know about #include](https://www.aptech.com/blog/what-you-need-to-know-about-include/)
 
 ## Example files
-Two program files are included:
-1. [did_calculations.gss](did_calculations.gss) - This file contains the code for computing the difference-in-differences calculations reported in the blog.
-2. [did_plots.gss](did_plots.gss) - This file produces the plot included in the blog.
+Six example files are included:
+1. [between_grunfeld.e](examples/between_grunfeld.e) - This file demonstrates the use of the procedure `between` to compute between group estimates using the Grunfeld dataset (1958).
+2. [fe_grunfeld.e](examples/fe_grunfeld.e) - This file demonstrates the use of the procedure `fixedEffects` to estimate a Fixed Effects model using the Grunfeld dataset (1958).
+3. [panel_grunfeld,e](examples/panel_grunfeld.e) - This file demonstrates the use of the procedure `fixedEffects` to estimate the fixed effects, random effects, between group, and pooled OLS models using the Grunfeld dataset (1958).
+4. [pdwide.e](examples/pdwide.e) - This file demonstrates the use of the procedure `pdwide` to change the orientation of a panel dataset from long to wide.
+5. [pooled_grunfeld.e](examples/pooled_grunfeld.e) - This file demonstrates the use of the procedure `pooledOLS` to estimate a pooled OLS model using the Grunfeld dataset (1958).
+6. [re_grunfeld.e](examples/re_grunfeld.e) - This file demonstrates the use of the procedure `randomEffects` to estimate a Random Effects model using the Grunfeld dataset (1958).
 
 ## Authors
 [Erica Clower](mailto:eclower@aptech.com)  
