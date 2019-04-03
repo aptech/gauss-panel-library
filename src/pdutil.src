@@ -315,3 +315,37 @@ proc (1) = pdbalanced(grp);
     
     retp( _isbalanced);
 endp;
+
+proc (1) = applyBy(matname, grp_id, fct);
+    local tmp_var, num_grps, tmp_rslts, grps;
+    
+    // Count number of groups
+    num_grps = rows(unique(grp_id));
+    
+    // Get matrix of unique grp numbers
+    grps =  unique(grp_id);
+    
+    local fct:proc;
+    
+    // Define output matrix
+    tmp_rslts = zeros(num_grps);
+    
+    // Loop through groups
+    for i(1, num_grps, 1);
+        tmp_rslts[i] = fct(selif(matname, grp_id .== grps[i]));
+    endfor;
+    
+    retp(tmp_rslts);
+    
+endp;
+
+proc(1) = balanced(grp);
+    local num_grps, T, _isbalanced;
+    
+    num_grps = rows(unique(grp));
+    T = unique(counts(grp, unique(grp)));
+    
+    _isbalanced = rows(t) == 1;
+    
+    retp( _isbalanced);
+endp;

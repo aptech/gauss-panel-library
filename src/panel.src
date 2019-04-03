@@ -157,13 +157,13 @@ proc panel(y, x, grp, robust);
     
     //Fixed effects regression
     struct panelEstimationOut estFE;
-    out1.estFE= fixedEffects(x, y, grp, robust);
+    out1.estFE= fixedEffects(y, x, grp, robust);
     
     struct panelEstimationOut estBetween;
-    out1.estBetween = between(x, y, grp, robust);
+    out1.estBetween = between(y, x, grp, robust);
     
     struct panelEstimationOut estRE;
-    out1.estRE = randomEffects(x, y, grp, robust);
+    out1.estRE = randomEffects(y, x, grp, robust);
     
     retp(out1);
 endp;
@@ -302,7 +302,7 @@ endp;
 **                                  the t-stat.
 */
 
-proc(1) =  pooledOLS(x, y, grp, robust);
+proc(1) =  pooledOLS(y, x, grp, robust);
     local total_obs, grp_nums, num_grps, y_means, x_means, y_var, x_var, tt, is_balanced,
         Tmean, Th, dum;
     
@@ -435,7 +435,7 @@ endp;
 **                                  the t-stat.
 */
 
-proc(1) =  fixedEffects(x, y, grp, robust);
+proc(1) =  fixedEffects(y, x, grp, robust);
     local total_obs, grp_nums, num_grps, y_means, x_means, y_var, x_var, tt, is_balanced,
         Tmean, Th;
     
@@ -706,7 +706,7 @@ endp;
 **                                  components.
 */
 
-proc(1) = randomEffects(x, y, grp, robust);
+proc(1) = randomEffects(y, x, grp, robust);
     local ind, x_variant, x_means_variant, x_var_variant, tt_variant, sigma2_v, sigma2_1,
         total_obs, grp_nums, num_grps, y_means, x_means, y_var, x_var, tt, is_balanced,
         Tmean, Th, sigma2_mu, rho_mu, theta, dum, xtr, ytr, resdf;
@@ -1103,6 +1103,9 @@ proc(1) = __goodnessofFit(struct panelEstimationOut estOut, y);
     if lower(estOut.method) $== "between";
         estOut.corrTSS = estOut.ytr'*estOut.ytr - estOut.num_grps*meanc(estOut.ytr)*meanc(estOut.ytr);
     else ;
+        local tmp, tmp1;
+        tmp = estOut.ytr'*estOut.ytr;
+        tmp1 = meanc(estOut.ytr)*meanc(estOut.ytr);
         estOut.corrTSS = estOut.ytr'*estOut.ytr - estOut.obs*meanc(estOut.ytr)*meanc(estOut.ytr);
     endif;
     
