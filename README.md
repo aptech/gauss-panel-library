@@ -11,11 +11,20 @@ This is an early stage library of panel data procedures for estimation and data 
 The program files require a working copy of **GAUSS 18+**. Many can be run on earlier versions with some small revisions.
 
 ### Installation
-These files such be downloaded to a directory which should be set to the working directory. If the hierarchy of this repository is maintained you should be able to run the examples by setting the gauss-panel-library/src directory to the GAUSS working directory.
+### Installing
+The GAUSS Time Series and Panel data tests can be easily installed using the **GAUSS Application Installer**, as shown below:
 
-![changing the GAUSS working directory](images/working_directory.png)
+1. Download the zipped folder `tspdlib.zip`.
+2. Select **Tools > Install Application** from the main **GAUSS** menu.  
+![install wizard](images/install_application.png)  
+3. Follow the installer prompts, making sure to navigate to the downloaded `pdlib.zip`.
+4. Before using the functions created by `pdlib` you will need to load the newly created `pdlib` library. This can be done in a number of ways:
+  *   Navigate to the library tool view window and click the small wrench located next to the `pdlib` library. Select `Load Library`.  
+  ![load library](images/load_tspdlib.PNG)
+  *  Enter `library pdlib` in the program input/output window.
+  *  Put the line `library pdlib;` at the beginning of your program files.
 
-**Note:** Because these are pre-release and no library has yet been built, these files utilize `#include` to access procedures. For more on `#include` please see our Aptech blog [What you need to know about #include](https://www.aptech.com/blog/what-you-need-to-know-about-include/)
+  Note: I have provided the individual files found in `pdlib.zip` for examination and review. However, installation should always be done using the `pdlib.zip` folder and the **GAUSS Application Installer**.
 
 ## Example files
 Six example files are included:
