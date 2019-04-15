@@ -711,50 +711,52 @@ proc(1) = randomEffects(y, x, grp, robust);
         total_obs, grp_nums, num_grps, y_means, x_means, y_var, x_var, tt, is_balanced,
         Tmean, Th, sigma2_mu, rho_mu, theta, dum, xtr, ytr, resdf;
     
-    //Data counts
-    //Total number of observations
+    // Data counts
+    // Total number of observations
     total_obs = rows(y);
-    //Uniques group numbers
+    // Uniques group numbers
     grp_nums = unique(grp);
-    //Total number of groups
+    // Total number of groups
     num_grps = rows(grp_nums);
     
-    //Prepare data
+    // Prepare data
     {y_means, x_means, y_var, x_var, tt, is_balanced, Tmean, Th} = __panelEstPrep(x, y, grp);
     
-    //Find time invariant variables
+    // Find time invariant variables
     ind = __findTimeInvariant(x, x_var);
     
-    //Find x_matrix without invariant variables
+    // Find x_matrix without invariant variables
     x_variant = __removeTimeInvariant(x, ind);
     
-    //Means for x_variant matrix
+    // Means for x_variant matrix
     {x_means_variant, x_var_variant, tt_variant} = findGroupMeans(x, grp);
     
-    //Run fixed effects without invariant variables
-    struct panelEstimationOut estFE;// Compute estimates
+    // Run fixed effects without invariant variables
+    struct panelEstimationOut estFE; 
+    // Compute estimates
     estFE = __panelEstimation(x_variant, y, robust, "fe", x_means_variant, y_means, num_grps, grp);
-    //Within variance
+    // Within variance
     sigma2_v = estfe.res_var;
     
-    //Run between group regression without invariant variables
-    struct panelEstimationOut estBetween;// Compute estimates
+    // Run between group regression without invariant variables
+    struct panelEstimationOut estBetween;
+    // Compute estimates
     estBetween = __panelEstimation(x_variant, y, robust, "between", x_means_variant, y_means, num_grps, grp);
-    //Between variance
+    // Between variance
     sigma2_1 = estBetween.res_var;
     
-    //Find sigma2_mu
+    // Find sigma2_mu
     sigma2_mu = __sigma2muRE(sigma2_1, sigma2_v, is_balanced, Tmean, Th);
     
-    //Find rho_mu
+    // Find rho_mu
     rho_mu = sigma2_mu / (sigma2_mu + sigma2_v);
     
-    //Theta
-    //Matrix of dummy variables
+    // Theta
+    // Matrix of dummy variables
     dum = grp .== grp_nums';
     theta = __thetaRE(sigma2_v, sigma2_mu, tt, Tmean, is_balanced, dum);
     
-    //Transform variable for regression
+    // Transform variable for regression
     {xtr, ytr, resdf} = __transformDataRE(x, y, x_means, y_means, is_balanced, theta);
     
     // Compute estimates
@@ -763,18 +765,18 @@ proc(1) = randomEffects(y, x, grp, robust);
     
     estRE.y_hat = (ones(rows(Xtr),1)~X)*estRE.coef;
     
-    //Transformed variables
+    // Transformed variables
     estRE.method = "re";
     estRE.xtr = xtr;
     estRE.ytr = ytr;
     
-    //Add robust to output structure
+    // Add robust to output structure
     estRE.robust = robust;
     
-    //Covariance
+    // Covariance
     estRE = __panelCovariance(estRE, grp);
     
-    //Goodness of fit
+    // Goodness of fit
     estRE.num_grps = num_grps;
     estRE.obs = total_obs;
     estRE = __goodnessofFit(estRE, y);

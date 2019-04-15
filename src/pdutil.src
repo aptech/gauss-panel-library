@@ -316,29 +316,6 @@ proc (1) = pdbalanced(grp);
     retp( _isbalanced);
 endp;
 
-proc (1) = applyBy(matname, grp_id, fct);
-    local tmp_var, num_grps, tmp_rslts, grps;
-    
-    // Count number of groups
-    num_grps = rows(unique(grp_id));
-    
-    // Get matrix of unique grp numbers
-    grps =  unique(grp_id);
-    
-    local fct:proc;
-    
-    // Define output matrix
-    tmp_rslts = zeros(num_grps);
-    
-    // Loop through groups
-    for i(1, num_grps, 1);
-        tmp_rslts[i] = fct(selif(matname, grp_id .== grps[i]));
-    endfor;
-    
-    retp(tmp_rslts);
-    
-endp;
-
 proc(1) = balanced(grp);
     local num_grps, T, _isbalanced;
     
@@ -349,3 +326,39 @@ proc(1) = balanced(grp);
     
     retp( _isbalanced);
 endp;
+
+
+proc (1) = withinmeans(grp, data);
+    local num_grps, numvars, uniq_grps, means;
+    
+    // Get unique grp list
+    uniq_grps = sortc(unique(grp),1);
+    
+    // Get number of grps
+    num_grps = rows(uniq_grps);
+    
+    // Storage matrix
+    means = zeros(num_grps, cols(data));
+    
+    // Loop through data
+    for i(1, cols(data), 1);
+        for j(1, num_grps, 1);
+            local tmp;
+            tmp = selif(data[.,i], grp .== uniq_grps[j]);
+            means[j,i] = meanc(tmp);
+        endfor;
+    endfor;
+    retp(means);
+endp;
+
+proc(1) = demean_data(grp, data);
+    local grp_means, exp_means, var_means, T;
+    
+    // Find group means
+    {grp_means, var_means, T}  = findGroupMeans(data, grp);
+
+    // Demean data
+    retp(data - grp_means);
+endp;   
+    
+    

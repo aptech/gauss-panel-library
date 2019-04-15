@@ -16,8 +16,9 @@
 **
 */
 
-#include panel.sdf
-#include panel.src
+new;
+
+library pdlib;
 
 // Load grunfeld data
 data = loadd(__FILE_DIR $+ "grunfeld.dat");

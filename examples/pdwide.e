@@ -5,7 +5,8 @@
 ** data from long panel data to a wide form panel 
 **
 */
-#include pdutil.src
+new;
+library pdlib;
 
 /*
 ** First using dataset and formula specification
