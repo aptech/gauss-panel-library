@@ -11,7 +11,6 @@ This is an early stage library of panel data procedures for estimation and data 
 The program files require a working copy of **GAUSS 18+**. Many can be run on earlier versions with some small revisions.
 
 ### Installation
-### Installing
 The GAUSS Time Series and Panel data tests can be easily installed using the **GAUSS Application Installer**, as shown below:
 
 1. Download the zipped folder `tspdlib.zip`.
