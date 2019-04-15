@@ -328,7 +328,7 @@ proc(1) = balanced(grp);
 endp;
 
 
-proc (1) = withinmeans(grp, data);
+proc (1) = withinMeans(grp, data);
     local num_grps, numvars, uniq_grps, means;
     
     // Get unique grp list
@@ -351,7 +351,7 @@ proc (1) = withinmeans(grp, data);
     retp(means);
 endp;
 
-proc(1) = demean_data(grp, data);
+proc(1) = demeanData(grp, data);
     local grp_means, exp_means, var_means, T;
     
     // Find group means
