@@ -34,6 +34,8 @@ Six example files are included:
 5. [pooled_grunfeld.e](examples/pooled_grunfeld.e) - This file demonstrates the use of the procedure `pooledOLS` to estimate a pooled OLS model using the Grunfeld dataset (1958).
 6. [re_grunfeld.e](examples/re_grunfeld.e) - This file demonstrates the use of the procedure `randomEffects` to estimate a Random Effects model using the Grunfeld dataset (1958).
 
+**Note** The `pdlib` panel data library was featured in the Aptech blog ["Panel data basics: One-way Individual Effects"](https://www.aptech.com/blog/panel-data-basics-one-way-individual-effects/).
+
 ## Authors
 [Erica Clower](mailto:eclower@aptech.com)  
 [Aptech Systems, Inc](https://www.aptech.com/)  
