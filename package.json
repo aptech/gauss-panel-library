@@ -1,0 +1,19 @@
+{
+    "author": "Erica Clower",
+    "deps": [
+    ],
+    "description": "This is an early stage library of panel data procedures for estimation and data management. The program are in pre-release form",
+    "dlib": [
+    ],
+    "keywords": [
+    ],
+    "license": "",
+    "name": "pdlib",
+    "repo": "",
+    "src": [
+        "panel.src",
+        "panel.sdf",
+        "pdutil.src"
+    ],
+    "version": "0.1.0"
+}
