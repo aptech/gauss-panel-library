@@ -37,7 +37,7 @@ Six example files are included:
 **Note** The `pdlib` panel data library was featured in the Aptech blog ["Panel data basics: One-way Individual Effects"](https://www.aptech.com/blog/panel-data-basics-one-way-individual-effects/).
 
 ## Authors
-[Erica Clower](mailto:eclower@aptech.com)  
+[Erica Clower](mailto:erica@aptech.com)  
 [Aptech Systems, Inc](https://www.aptech.com/)  
 [![alt text][1.1]][1]
 [![alt text][2.1]][2]
