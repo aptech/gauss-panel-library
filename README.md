@@ -11,9 +11,13 @@ This is an early stage library of panel data procedures for estimation and data 
 The program files require a working copy of **GAUSS 18+**. Many can be run on earlier versions with some small revisions.
 
 ### Installation
-The GAUSS Time Series and Panel data tests can be easily installed using the **GAUSS Application Installer**, as shown below:
+**GAUSS 20+**
+The GAUSS Panel Series library can be installed and updated directly in GAUSS using the [GAUSS package manager](https://www.aptech.com/blog/gauss-package-manager-basics/).
 
-1. Download the zipped folder `tspdlib.zip` from the [Panel Library Release page](https://github.com/aptech/gauss-panel-library/releases).
+**GAUSS 18+**
+The GAUSS Panel Series library can be easily installed using the **GAUSS Application Installer**, as shown below:
+
+1. Download the zipped folder `pdlib.zip` from the [Panel Library Release page](https://github.com/aptech/gauss-panel-library/releases).
 2. Select **Tools > Install Application** from the main **GAUSS** menu.  
 ![install wizard](images/install_application.png)  
 3. Follow the installer prompts, making sure to navigate to the downloaded `pdlib.zip`.
