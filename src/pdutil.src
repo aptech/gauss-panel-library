@@ -7,6 +7,67 @@
 #include dynargs.dec
 
 /*
+**> pdLongStack
+**
+**  Purpose:  Reshapes wide panel data as long panel data.
+**
+**  Format:  y_st = pdLong(data, stems, i_var, j_name)
+**  
+**
+**  Input:   yt	-  T x KN+1 matrix of cross sectional data
+**
+**  Output:  y_st -  (T*KN)x1 Matrix of stacked cross sectional data, i.e. yt[., 1]|yt[., 2]|yt[., 3]....|yt[., K];
+**
+**  Notes:   Data must be stored with column in the stem1, stem2, ...., stem3 syntax.
+**           Procedure is compatible with dataframes but does not work for categorical 
+**           variables. 
+*/
+
+proc(1) = pdLong(data, stems, i_var, j_name);
+    local group_0, data_sub, h, h_i, data_tmp, id, num_obs, group, data_long;
+    
+    // Separate group column from
+    // the rest of the data 
+    group_0 = data[., i_var];
+    data_sub = delcols(data, i_var);
+    
+    // Get full list of column headers
+    h = getcolnames(data_sub);
+    
+    // Loop through stems
+    for i(1, rows(stems), 1);
+        
+        // Get headers for current stem
+        h_i = selif(h, strindx(h, stems[i]) .> 0);
+        
+        // Get data associated with current stem
+        data_tmp = data_sub[., h_i];
+        
+        // Generate id variable for current stem
+        id = asdf(strreplace(h_i, stems[i], ""), j_name);
+        num_obs = rows(id);
+        
+        // Reshape id and group to match long data
+        id = reshape(id, rows(id)*rows(group_0));
+        group = group_0[seqa(1,1,rows(group_0)).*.ones(num_obs, 1)];
+        
+        // Vecr data for particular variable
+        // vecr(data_tmp);
+        
+        // Create long dataframe and merge with
+        // existing long data 
+        if i == 1;
+            data_long = group~id~vecr(data_tmp);
+        else;
+            data_long = outerJoin(data_long, 1|2, group~id~vecr(data_tmp), 1|2, "full");
+        endif;
+    endfor;
+    
+    // Add variable names 
+    retp(setcolnames(data_long, i_var$|j_name$|stems));
+endp;
+
+/*
 **> pdStack
 **
 **  Purpose:  Stacks columns of panel series into a single stacked vector
